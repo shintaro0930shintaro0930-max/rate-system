@@ -1,0 +1,189 @@
+
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>ログイン画面（共有版）</title>
+<style>
+body {
+    font-family: sans-serif;
+    text-align: center;
+    margin-top: 100px;
+    background-color: #f5f5f5;
+}
+button {
+    padding: 12px 25px;
+    margin: 8px;
+    font-size: 16px;
+    cursor: pointer;
+    border-radius: 8px;
+    border: none;
+}
+#adminBtn { background-color: #ff6b6b; color: white; }
+#userBtn { background-color: #4dabf7; color: white; }
+input {
+    padding: 8px;
+    font-size: 16px;
+    border-radius: 6px;
+    border: 1px solid #ccc;
+}
+#rateDisplay {
+    margin-top: 15px;
+    font-size: 18px;
+    font-weight: bold;
+}
+</style>
+</head>
+<body>
+
+<h1>ログイン選択</h1>
+
+<button id="adminBtn" onclick="showAdmin()">管理者用</button>
+<button id="userBtn" onclick="showUser()">利用者用</button>
+
+<div id="inputArea"></div>
+
+<script type="module">
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, collection, getDocs }
+from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDNe3pebkyG-vwAZ2cMyI-spo_Ri4FZ-oQ",
+  authDomain: "rate-system-4a9dc.firebaseapp.com",
+  projectId: "rate-system-4a9dc",
+  storageBucket: "rate-system-4a9dc.firebasestorage.app",
+  messagingSenderId: "1074088116982",
+  appId: "1:1074088116982:web:1a02af308c9c1598c622d7"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+let members = {};
+let currentId = null;
+
+// ===== データ読み込み =====
+async function loadData() {
+    members = {};
+    const snapshot = await getDocs(collection(db, "members"));
+    snapshot.forEach(docSnap => {
+        members[docSnap.id] = docSnap.data().rate;
+    });
+}
+
+// ===== 画面切り替え =====
+window.showAdmin = function() {
+    document.getElementById("inputArea").innerHTML = `
+        <h2>管理者パスワード入力</h2>
+        <input type="password" id="adminPass">
+        <button onclick="checkAdmin()">ログイン</button>
+    `;
+}
+
+window.showUser = function() {
+    document.getElementById("inputArea").innerHTML = `
+        <h2>会員ID入力</h2>
+        <input type="text" id="userId">
+        <button onclick="checkUser()">ログイン</button>
+    `;
+}
+
+window.checkAdmin = function() {
+    const pass = document.getElementById("adminPass").value;
+    if (pass === "0930") {
+        showAdminMenu();
+    } else {
+        alert("パスワードが違います");
+    }
+}
+
+window.showAdminMenu = async function() {
+    await loadData();
+    let list = "";
+    for (let id in members) {
+        list += id + " (レート:" + members[id] + ")<br>";
+    }
+    if (list === "") list = "登録IDなし";
+
+    document.getElementById("inputArea").innerHTML = `
+        <h2>管理メニュー</h2>
+        <div>${list}</div>
+        <br>
+        <input type="text" id="newId" placeholder="追加する8桁ID">
+        <button onclick="addId()">追加</button>
+        <br>
+        <input type="text" id="deleteId" placeholder="削除するID">
+        <button onclick="deleteId()">削除</button>
+        <br><br>
+        <input type="text" id="manageId" placeholder="レート管理ID">
+        <button onclick="checkManageId()">管理</button>
+    `;
+}
+
+window.addId = async function() {
+    const id = document.getElementById("newId").value;
+    if (!/^\d{8}$/.test(id)) { alert("8桁の数字で入力してください"); return; }
+    await setDoc(doc(db, "members", id), { rate: 100 });
+    alert("追加しました");
+    showAdminMenu();
+}
+
+window.deleteId = async function() {
+    const id = document.getElementById("deleteId").value;
+    await deleteDoc(doc(db, "members", id));
+    alert("削除しました");
+    showAdminMenu();
+}
+
+window.checkManageId = async function() {
+    const id = document.getElementById("manageId").value;
+    const snap = await getDoc(doc(db, "members", id));
+    if (!snap.exists()) { alert("会員IDが存在しません"); return; }
+    currentId = id;
+    showBattleButtons(snap.data().rate);
+}
+
+function showBattleButtons(rate) {
+    document.getElementById("inputArea").innerHTML = `
+        <h2>ID: ${currentId}</h2>
+        <div id="rateDisplay">現在のレート: ${rate}</div>
+        <button onclick="win()">勝ち</button>
+        <button onclick="lose()">負け</button>
+        <button onclick="showAdminMenu()">戻る</button>
+    `;
+}
+
+window.win = async function() {
+    const change = Math.floor(Math.random() * 5) + 1;
+    const ref = doc(db, "members", currentId);
+    const snap = await getDoc(ref);
+    let rate = snap.data().rate + change;
+    await updateDoc(ref, { rate: rate });
+    showBattleButtons(rate);
+}
+
+window.lose = async function() {
+    const change = Math.floor(Math.random() * 5) + 1;
+    const ref = doc(db, "members", currentId);
+    const snap = await getDoc(ref);
+    let rate = snap.data().rate - change;
+    await updateDoc(ref, { rate: rate });
+    showBattleButtons(rate);
+}
+
+window.checkUser = async function() {
+    const id = document.getElementById("userId").value;
+    const snap = await getDoc(doc(db, "members", id));
+    if (!snap.exists()) { alert("会員IDが存在しません"); return; }
+    document.getElementById("inputArea").innerHTML = `
+        <h2>ID: ${id}</h2>
+        <div id="rateDisplay">現在のレート: ${snap.data().rate}</div>
+    `;
+}
+
+</script>
+
+</body>
+</html>
